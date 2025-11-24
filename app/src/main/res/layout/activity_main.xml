@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:text="Initializing..."
+        android:textSize="14sp"
+        android:background="#f0f0f0"
+        android:padding="8dp" />
+
+    <Button
+        android:id="@+id/startButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="Start Scan"
+        android:enabled="false" />
+
+    <Button
+        android:id="@+id/stopButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="Stop Scan"
+        android:enabled="false" />
+
+    <Button
+        android:id="@+id/singleScanButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Single Scan"
+        android:enabled="false" />
+
+</LinearLayout>
