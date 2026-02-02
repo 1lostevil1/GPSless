@@ -1,0 +1,7 @@
+com/example/BluetoothDeviceInfo.class
+com/example/WifiNetwork.class
+com/example/NetworkSnapshotEntity.class
+com/example/CellularNetwork.class
+com/example/GpsData.class
+com/example/NetworkSnapshotEntity$NetworkSnapshotEntityBuilder.class
+com/example/NetworkSnapshot.class
