@@ -1,6 +1,11 @@
 package com.example;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.Type;
+import org.hibernate.type.SqlTypes;
+
+import java.util.List;
 
 @Entity
 @Table(name = "network_snapshots")
@@ -15,5 +20,7 @@ public class NetworkSnapshotEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String snapshots;
+    @Type(JsonType.class)
+    @Column(columnDefinition = "jsonb")
+    private List<NetworkSnapshot> snapshots;
 }

@@ -9,7 +9,7 @@ import java.util.List;
 public class NetworkTrackValidator {
 
     // Пороговые значения (можно вынести в конфиг при необходимости)
-    private static final long MAX_ALLOWED_TIME_GAP_MS = 30_000; // 30 сек
+    private static final long MAX_ALLOWED_TIME_GAP_MS = 300_000; // 300 сек
     private static final double MAX_ALLOWED_SPEED_KMH = 300.0;   // 300 км/ч
     private static final double MAX_COORD_JUMP_METERS = 500.0;   // 500 м
 
