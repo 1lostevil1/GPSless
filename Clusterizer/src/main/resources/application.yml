@@ -20,5 +20,8 @@ spring:
       properties:
         spring.json.trusted.packages: "*"
 
+  clusterJob:
+    batchSize: 30
+
 server:
   port: 8090

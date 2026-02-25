@@ -1,4 +1,5 @@
 package com.example;
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -8,7 +9,7 @@ import org.hibernate.type.SqlTypes;
 import java.util.List;
 
 @Entity
-@Table(name = "network_snapshots")
+@Table(name = "network_snapshot")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -20,7 +21,14 @@ public class NetworkSnapshotEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Type(JsonType.class)
-    @Column(columnDefinition = "jsonb")
-    private List<NetworkSnapshot> snapshots;
+    @Type(JsonBinaryType.class)
+    private NetworkSnapshot snapshot;
+
+    @JdbcTypeCode(SqlTypes.ENUM)
+    private Status status;
+
+
+     public enum Status{
+        READY, DONE
+    }
 }
