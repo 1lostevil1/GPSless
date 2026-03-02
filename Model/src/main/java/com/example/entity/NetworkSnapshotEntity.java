@@ -1,4 +1,5 @@
-package com.example;
+package com.example.entity;
+import com.example.dto.NetworkSnapshot;
 import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -6,10 +7,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.Type;
 import org.hibernate.type.SqlTypes;
 
-import java.util.List;
-
 @Entity
-@Table(name = "network_snapshot")
+@Table(name = "snapshot")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -28,7 +27,5 @@ public class NetworkSnapshotEntity {
     private Status status;
 
 
-     public enum Status{
-        READY, DONE
-    }
+
 }

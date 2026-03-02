@@ -1,7 +1,6 @@
 package com.example.service;
 
-import com.example.NetworkSnapshot;
-import org.springframework.beans.factory.annotation.Value;
+import com.example.dto.NetworkSnapshot;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 

@@ -222,14 +222,14 @@ class NetworkDataCollector(private val context: Context) {
             // Ждем завершения всех задач
             val location = locationDeferred.await()
             val wifiNetworks = wifiDeferred.await()
-            val cellularNetworks = cellularDeferred.await()
+            val cellularNetwork = cellularDeferred.await()
             val bluetoothDevices = bluetoothDeferred.await()
 
             // Создаем снимок
             val snapshot = NetworkSnapshot(
                 location = location,
                 wifiNetworks = wifiNetworks,
-                cellularNetworks = cellularNetworks,
+                cellularNetwork = cellularNetwork,
                 bluetoothDevices = bluetoothDevices
             )
 

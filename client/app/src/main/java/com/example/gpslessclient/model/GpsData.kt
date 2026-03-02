@@ -7,5 +7,4 @@ data class GpsData(
     val speed: Float,
     val bearing: Float, // Направление движения (0 = север)
     val altitude: Double,
-    val timestamp: Long = System.currentTimeMillis()
 )

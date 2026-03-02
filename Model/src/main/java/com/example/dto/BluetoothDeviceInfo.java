@@ -1,4 +1,4 @@
-package com.example;
+package com.example.dto;
 
 public record BluetoothDeviceInfo(
         String name,

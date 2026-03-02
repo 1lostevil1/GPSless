@@ -1,4 +1,4 @@
-package com.example;
+package com.example.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -12,7 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 public class NetworkSnapshot {
     private GpsData location;
+    private CellularNetwork cellularNetwork;
     private List<WifiNetwork> wifiNetworks;
-    private List<CellularNetwork> cellularNetworks;
     private List<BluetoothDeviceInfo> bluetoothDevices;
 }

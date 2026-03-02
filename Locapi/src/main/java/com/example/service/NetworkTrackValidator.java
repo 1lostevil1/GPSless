@@ -1,7 +1,7 @@
 package com.example.service;
 
-import com.example.GpsData;
-import com.example.NetworkSnapshot;
+import com.example.dto.GpsData;
+import com.example.dto.NetworkSnapshot;
 import org.springframework.stereotype.Service;
 import java.util.List;
 

@@ -127,8 +127,7 @@ class LocationManager(private val context: Context) {
         accuracy = accuracy,
         speed = speed,
         bearing = bearing,
-        altitude = altitude,
-        timestamp = time   // можно использовать System.currentTimeMillis(), если нужно
+        altitude = altitude
     )
 
     fun isGpsEnabled(): Boolean = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)

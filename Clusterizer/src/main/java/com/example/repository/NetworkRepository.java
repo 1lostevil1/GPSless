@@ -1,6 +1,6 @@
 package com.example.repository;
 
-import com.example.NetworkSnapshotEntity;
+import com.example.entity.NetworkSnapshotEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,7 +12,7 @@ import java.util.List;
 public interface NetworkRepository extends JpaRepository<NetworkSnapshotEntity, Long> {
 
     @Query(value = """
-                    SELECT * FROM network_snapshots 
+                    SELECT * FROM snapshot
                     WHERE status = :status 
                     ORDER BY id 
                     LIMIT :limit 

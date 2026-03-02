@@ -22,7 +22,7 @@ class CellularScanner(private val context: Context) {
 
     @RequiresPermission(Manifest.permission.READ_PHONE_STATE)
     @RequiresApi(Build.VERSION_CODES.P)
-    fun getNetworkInfo(): List<CellularNetwork>? {
+    fun getNetworkInfo(): CellularNetwork? {
         Log.d(TAG, "Получение информации о сотовой сети...")
 
         try {
@@ -69,7 +69,7 @@ class CellularScanner(private val context: Context) {
                 }
             }
 
-            return networks
+            return if (networks.isEmpty()) null else networks.get(0);
 
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка получения информации о сети: ${e.message}")
