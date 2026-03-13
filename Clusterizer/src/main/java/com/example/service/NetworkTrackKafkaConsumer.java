@@ -1,7 +1,11 @@
-package com.example.consumer;
+package com.example.service;
 
-import com.example.dto.*;
-import com.example.entity.*;
+import com.example.network.dto.CellularNetwork;
+import com.example.network.dto.NetworkSnapshot;
+import com.example.network.entity.NetworkEntity;
+import com.example.network.entity.NetworkType;
+import com.example.network.entity.Status;
+import com.example.network.util.ClusterKeyStrategy;
 import com.example.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,9 +22,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class NetworkTrackKafkaConsumer {
 
-    private final WifiNetworkRepository wifiRepository;
-    private final CellularNetworkRepository cellularRepository;
-    private final BluetoothDeviceRepository bluetoothRepository;
+    private final NetworkRepository networkRepository;
+    private final ClusterKeyStrategy clusterKeyStrategy;
 
     @KafkaListener(topics = "snapshots")
     @Transactional
@@ -31,57 +34,54 @@ public class NetworkTrackKafkaConsumer {
 
         log.info("Received {} snapshots", snapshots.size());
 
-        List<WifiNetworkEntity> wifiEntities = new ArrayList<>();
-        List<CellularNetworkEntity> cellularEntities = new ArrayList<>();
-        List<BluetoothDeviceEntity> bluetoothEntities = new ArrayList<>();
+        List<NetworkEntity> networkEntities = new ArrayList<>();
 
         for (NetworkSnapshot snapshot : snapshots) {
             // Wi-Fi сети
             if (snapshot.getWifiNetworks() != null) {
                 snapshot.getWifiNetworks().stream()
-                        .map(wifi -> WifiNetworkEntity.builder()
-                                .wifiNetwork(wifi)
-                                .gpsData(snapshot.getLocation())
-                                .clusterId(wifi.getBssid())
+                        .map(wifi -> NetworkEntity.builder()
+                                .clusterKey(clusterKeyStrategy.generate(wifi))
+                                .latitude(snapshot.getLocation().getLatitude())
+                                .longitude(snapshot.getLocation().getLongitude())
+                                .name(wifi.getSsid())
+                                .signalStrength(wifi.getSignalLevel())
                                 .status(Status.READY)
+                                .type(NetworkType.WIFI)
                                 .build())
-                        .forEach(wifiEntities::add);
+                        .forEach(networkEntities::add);
             }
             // Сотовая сеть
-            if (snapshot.getCellularNetwork() != null) {
-                cellularEntities.add(CellularNetworkEntity.builder()
-                        .cellularNetwork(snapshot.getCellularNetwork())
-                        .gpsData(snapshot.getLocation())
-                        .snapshotId(snapshotId)
+            CellularNetwork cellularNetwork = snapshot.getCellularNetwork();
+            if (cellularNetwork != null) {
+                networkEntities.add(NetworkEntity.builder()
+                        .clusterKey(clusterKeyStrategy.generate(snapshot.getCellularNetwork()))
+                        .latitude(snapshot.getLocation().getLatitude())
+                        .longitude(snapshot.getLocation().getLongitude())
+                        .name(cellularNetwork.mcc() + cellularNetwork.mnc())
+                        .signalStrength(cellularNetwork.signalStrength())
+                        .status(Status.READY)
+                        .type(NetworkType.CELLULAR)
                         .build());
             }
             // BLE маячки
             if (snapshot.getBluetoothDevices() != null) {
                 snapshot.getBluetoothDevices().stream()
-                        .filter(BluetoothDeviceInfo::isBeacon)
-                        .map(bt -> BluetoothDeviceEntity.builder()
-                                .bluetoothDevice(bt)
-                                .gpsData(snapshot.getLocation())
-                                .snapshotId(snapshotId)
+                        .map(bt -> NetworkEntity.builder()
+                                .clusterKey(clusterKeyStrategy.generate(bt))
+                                .latitude(snapshot.getLocation().getLatitude())
+                                .longitude(snapshot.getLocation().getLongitude())
+                                .name(bt.name())
+                                .signalStrength(bt.rssi())
+                                .status(Status.READY)
+                                .type(NetworkType.BLUETOOTH)
                                 .build())
-                        .forEach(bluetoothEntities::add);
+                        .forEach(networkEntities::add);
             }
         }
-
-        // Сохраняем всё пачками
-        if (!wifiEntities.isEmpty()) {
-            wifiRepository.saveAll(wifiEntities);
-            log.info("Saved {} Wi-Fi networks", wifiEntities.size());
-        }
-
-        if (!cellularEntities.isEmpty()) {
-            cellularRepository.saveAll(cellularEntities);
-            log.info("Saved {} cellular networks", cellularEntities.size());
-        }
-
-        if (!bluetoothEntities.isEmpty()) {
-            bluetoothRepository.saveAll(bluetoothEntities);
-            log.info("Saved {} Bluetooth devices", bluetoothEntities.size());
+        if (!networkEntities.isEmpty()) {
+            networkRepository.saveAll(networkEntities);
+            log.info("Saved {} network entities", networkEntities.size());
         }
     }
 }

@@ -1,8 +1,8 @@
 package com.example.controller;
 
-import com.example.dto.NetworkSnapshot;
-import com.example.service.NetworkTrackKafkaProducer;
-import com.example.service.NetworkTrackValidator;
+import com.example.network.dto.NetworkSnapshot;
+import com.example.service.network.NetworkTrackKafkaProducer;
+import com.example.service.network.NetworkTrackValidator;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;

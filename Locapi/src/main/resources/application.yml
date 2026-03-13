@@ -14,6 +14,17 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
+validator:
+  max-time-gap-ms: 300000
+  max-speed-kmh: 300.0
+  max-coord-jump-meters: 500.0
+
+jwt:
+  secret: "mySecretKeyWithAtLeast32CharactersLongForHS256"
+  lifetime: "PT24H"
+
+topic: "snapshots"
+
 server:
   address: 0.0.0.0
   port: 8080

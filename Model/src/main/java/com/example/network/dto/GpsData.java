@@ -1,4 +1,4 @@
-package com.example.dto;
+package com.example.network.dto;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;

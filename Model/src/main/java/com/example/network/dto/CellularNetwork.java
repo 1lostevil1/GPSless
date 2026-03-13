@@ -1,4 +1,4 @@
-package com.example.dto;
+package com.example.network.dto;
 
 public record CellularNetwork(
         String networkType,    // 2G, 3G, 4G, 5G
