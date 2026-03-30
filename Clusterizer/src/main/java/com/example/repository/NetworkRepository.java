@@ -16,13 +16,13 @@ import java.util.List;
 public interface NetworkRepository extends JpaRepository<NetworkEntity, Long> {
 
     @Query(value = """
-            SELECT * FROM network
-            WHERE status = :status
-            ORDER BY id
-            LIMIT :limit
-            FOR UPDATE SKIP LOCKED
-            """, nativeQuery = true)
-    List<NetworkEntity> findBatchNative(@Param("status") Status status, @Param("limit") int limit);
+    SELECT * FROM network
+    WHERE status = CAST(:status AS status_type)
+    ORDER BY id
+    LIMIT :limit
+    FOR UPDATE SKIP LOCKED
+    """, nativeQuery = true)
+    List<NetworkEntity> findBatchNative(@Param("status") String status, @Param("limit") int limit);
 
     @Modifying
     @Query("UPDATE NetworkEntity n SET n.status = :status WHERE n.id IN :ids")

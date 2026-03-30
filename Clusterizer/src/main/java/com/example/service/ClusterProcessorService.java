@@ -3,6 +3,7 @@ package com.example.service;
 import com.example.network.entity.ClusterEntity;
 import com.example.network.entity.NetworkEntity;
 import com.example.repository.ClusterRepository;
+import com.example.user.entity.Role;
 import com.github.davidmoten.geo.LatLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,22 +29,26 @@ public class ClusterProcessorService {
     public void processNewCluster(String clusterKey, String geohash, List<NetworkEntity> networks) {
         if (networks == null || networks.isEmpty()) return;
 
+        int signalCount = networks.stream()
+                .mapToInt(n -> n.getCreatedBy().equals(Role.ROLE_ADMIN) ? 1000 : 1)
+                .sum();
+
         LatLong center = mathService.calculateCenter(networks);
         double radius = mathService.calculateRadius(networks, center);
 
         ClusterEntity newCluster = ClusterEntity.builder()
                 .clusterKey(clusterKey)
                 .geohash(geohash)
-                .name(networks.getFirst().getName())
-                .type(networks.getFirst().getType())
+                .name(networks.get(0).getName())
+                .type(networks.get(0).getType())
                 .latitude(center.getLat())
                 .longitude(center.getLon())
                 .radius(radius)
-                .signalCount(networks.size())
+                .signalCount(signalCount)
                 .build();
 
         try {
-            clusterRepository.save(newCluster);
+            clusterRepository.saveAndFlush(newCluster);
             log.debug("Created new cluster id={} for key={} geohash={}",
                     newCluster.getId(), clusterKey, geohash);
         } catch (DataIntegrityViolationException e) {
@@ -60,7 +65,6 @@ public class ClusterProcessorService {
     /**
      * Обновляет существующий кластер новыми сетями.
      */
-    @Transactional
     public void enrichCluster(ClusterEntity cluster, List<NetworkEntity> networks) {
         if (networks == null || networks.isEmpty()) {
             log.warn("No networks to enrich cluster {}", cluster.getId());

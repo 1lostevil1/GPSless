@@ -7,6 +7,7 @@ import com.example.network.entity.NetworkType;
 import com.example.network.entity.Status;
 import com.example.network.util.ClusterKeyStrategy;
 import com.example.repository.*;
+import com.example.network.dto.TrackDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -27,7 +28,8 @@ public class NetworkTrackKafkaConsumer {
 
     @KafkaListener(topics = "snapshots")
     @Transactional
-    public void listen(@Payload List<NetworkSnapshot> snapshots) {
+    public void listen(@Payload TrackDTO track) {
+        List<NetworkSnapshot> snapshots = track.track();
         if (snapshots == null || snapshots.isEmpty()) {
             return;
         }
@@ -48,6 +50,7 @@ public class NetworkTrackKafkaConsumer {
                                 .signalStrength(wifi.getSignalLevel())
                                 .status(Status.READY)
                                 .type(NetworkType.WIFI)
+                                .createdBy(track.role())
                                 .build())
                         .forEach(networkEntities::add);
             }
@@ -62,6 +65,7 @@ public class NetworkTrackKafkaConsumer {
                         .signalStrength(cellularNetwork.signalStrength())
                         .status(Status.READY)
                         .type(NetworkType.CELLULAR)
+                        .createdBy(track.role())
                         .build());
             }
             // BLE маячки
@@ -75,6 +79,7 @@ public class NetworkTrackKafkaConsumer {
                                 .signalStrength(bt.rssi())
                                 .status(Status.READY)
                                 .type(NetworkType.BLUETOOTH)
+                                .createdBy(track.role())
                                 .build())
                         .forEach(networkEntities::add);
             }

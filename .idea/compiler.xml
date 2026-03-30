@@ -17,6 +17,7 @@
       <module name="Clusterizer" options="-parameters" />
       <module name="Locapi" options="-parameters" />
       <module name="Model" options="-parameters" />
+      <module name="migrations" options="-parameters" />
     </option>
   </component>
 </project>

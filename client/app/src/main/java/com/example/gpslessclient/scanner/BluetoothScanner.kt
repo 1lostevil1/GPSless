@@ -1,155 +1,230 @@
 package com.example.gpslessclient.scanner
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.le.*
 import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Build
-import android.os.ParcelUuid
-import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.example.gpslessclient.model.BluetoothDeviceInfo
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import org.altbeacon.beacon.Beacon
+import org.altbeacon.beacon.BeaconConsumer
+import org.altbeacon.beacon.BeaconManager
+import org.altbeacon.beacon.BeaconParser
+import org.altbeacon.beacon.RangeNotifier
+import org.altbeacon.beacon.Region
 
-class BluetoothScanner(private val context: Context) {
-    private val adapter = BluetoothAdapter.getDefaultAdapter()
-    private var bleScanner: BluetoothLeScanner? = null
-    private var scanCallback: ScanCallback? = null
-    private val foundDevices = mutableMapOf<String, BluetoothDeviceInfo>()
-    private var isScanning = false
+class BluetoothScanner(context: Context) {
 
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-    @SuppressLint("MissingPermission")
-    fun scan(scanDuration: Long = 10000): List<BluetoothDeviceInfo> {
-        // Проверки (без изменений)
-        if (adapter == null || !isBleSupported()) return emptyList()
-        if (!adapter.isEnabled) return emptyList()
-        if (!hasBlePermissions()) return emptyList()
+    private val appContext = context.applicationContext
+    private val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private val beaconManager: BeaconManager = BeaconManager.getInstanceForApplication(appContext)
 
-        stopScan()
-        foundDevices.clear()
+    // iBeacon layout (Apple manufacturer 0x004C => bytes 4c00, prefix 0x0215)
+    private val IBEACON_LAYOUT =
+        "m:0-1=4c00,m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"
 
-        bleScanner = adapter.bluetoothLeScanner ?: return emptyList()
+    private val regionAll = Region("all-recognized-beacons", null, null, null)
+    private val scanMutex = Mutex()
 
-        scanCallback = object : ScanCallback() {
-            override fun onScanResult(callbackType: Int, result: ScanResult) {
-                // Добавляем проверку на маячок
-                if (isBeacon(result)) {
-                    val device = result.device
-                    val deviceName = result.scanRecord?.deviceName ?: device.name ?: "Unknown Beacon"
-                    foundDevices[device.address] = BluetoothDeviceInfo(
-                        name = deviceName,
-                        address = device.address,
-                        rssi = result.rssi,
-                        deviceType = "BEACON" // или можно оставить getDeviceType(device.type), но тогда маячки не будут явно выделены
-                    )
-                }
-                // Не-маячки игнорируем
-            }
+    @Volatile private var bound = false
+    private var connectSignal: CompletableDeferred<Unit>? = null
 
-            override fun onScanFailed(errorCode: Int) {
-                stopScan()
-            }
+    @Volatile private var ranging = false
+    private var activeNotifier: RangeNotifier? = null
+
+    private val consumer = object : BeaconConsumer {
+        override fun getApplicationContext(): Context = appContext
+
+        override fun unbindService(serviceConnection: ServiceConnection) {
+            appContext.unbindService(serviceConnection)
         }
 
-        val scanSettings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
+        override fun bindService(intent: Intent, serviceConnection: ServiceConnection, mode: Int): Boolean {
+            return appContext.bindService(intent, serviceConnection, mode)
+        }
 
-        bleScanner?.startScan(null, scanSettings, scanCallback)
-        isScanning = true
-
-        Thread.sleep(scanDuration) // Блокировка – лучше заменить на корутины, но оставляем как есть
-
-        stopScan()
-        return foundDevices.values.toList()
+        override fun onBeaconServiceConnect() {
+            connectSignal?.complete(Unit)
+        }
     }
 
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-    @SuppressLint("MissingPermission")
-    private fun stopScan() {
-        if (isScanning && bleScanner != null && scanCallback != null) {
-            bleScanner?.stopScan(scanCallback)
+    init {
+        // Максимум “популярных” форматов со статичным/условно статичным ID:
+        // - iBeacon (статичный)
+        // - AltBeacon (статичный)
+        // - Eddystone UID (статичный)
+        // - Eddystone URL (условно статичный, если URL не меняется)
+        // - URI Beacon (условно статичный, устаревший, но встречается)
+        //
+        // НЕ добавляем TLM (телеметрия) и EID (динамический rotating ID).
+        beaconManager.beaconParsers.clear()
+        beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout(IBEACON_LAYOUT))
+        beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout(BeaconParser.ALTBEACON_LAYOUT))
+        beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout(BeaconParser.EDDYSTONE_UID_LAYOUT))
+        beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout(BeaconParser.EDDYSTONE_URL_LAYOUT))
+        beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout(BeaconParser.URI_BEACON_LAYOUT))
+
+        // Быстрый поиск
+        beaconManager.foregroundScanPeriod = 1100L
+        beaconManager.foregroundBetweenScanPeriod = 0L
+    }
+
+
+    suspend fun scan(scanDurationMs: Long = 10_000): List<BluetoothDeviceInfo> {
+        return scanMutex.withLock {
+            withContext(Dispatchers.Main) {
+                prechecksOrThrow()
+                ensureBound()
+
+                internalStopRangingIfNeeded()
+
+                val found = LinkedHashMap<String, BluetoothDeviceInfo>()
+
+                val notifier = RangeNotifier { beacons, _ ->
+                    for (b in beacons) {
+                        val beaconId = buildStaticBeaconId(b) ?: continue
+                        val info = BluetoothDeviceInfo(
+                            beaconId = beaconId,
+                            name = runCatching { b.bluetoothName }.getOrNull(),
+                            address = runCatching { b.bluetoothAddress }.getOrNull() ?: "unknown",
+                            rssi = b.rssi
+                        )
+                        synchronized(found) {
+                            found[beaconId] = info
+                        }
+                    }
+                }
+
+                activeNotifier = notifier
+                beaconManager.addRangeNotifier(notifier)
+                beaconManager.startRangingBeaconsInRegion(regionAll)
+                ranging = true
+
+                try {
+                    delay(scanDurationMs)
+                } finally {
+                    internalStopRangingIfNeeded()
+                }
+
+                synchronized(found) {
+                    found.values.toList()
+                }
+            }
         }
-        isScanning = false
-        scanCallback = null
-        bleScanner = null
+    }
+
+    fun stopScan() {
+        runCatching { beaconManager.stopRangingBeaconsInRegion(regionAll) }
+        activeNotifier?.let { runCatching { beaconManager.removeRangeNotifier(it) } }
+        activeNotifier = null
+        ranging = false
+    }
+
+    fun close() {
+        stopScan()
+        if (bound) {
+            runCatching { beaconManager.unbind(consumer) }
+            bound = false
+        }
+    }
+
+    // -------------------- Internal --------------------
+
+    private fun prechecksOrThrow() {
+        if (!appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            throw IllegalStateException("BLE is not supported on this device")
+        }
+        val a = adapter ?: throw IllegalStateException("BluetoothAdapter is null")
+        if (!a.isEnabled) throw IllegalStateException("Bluetooth is disabled")
+        if (!hasBlePermissions()) throw SecurityException("Missing BLE permissions")
+
+        // Android 6–11: для BLE-скана часто нужен включенный Location toggle
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && !isLocationEnabled()) {
+            throw IllegalStateException("Location services are disabled (required for BLE scan on Android < 12)")
+        }
+    }
+
+    private suspend fun ensureBound() {
+        if (bound) return
+        connectSignal = CompletableDeferred()
+        beaconManager.bind(consumer)
+        bound = true
+        connectSignal?.await()
+    }
+
+    private fun internalStopRangingIfNeeded() {
+        if (ranging) runCatching { beaconManager.stopRangingBeaconsInRegion(regionAll) }
+        activeNotifier?.let { runCatching { beaconManager.removeRangeNotifier(it) } }
+        activeNotifier = null
+        ranging = false
     }
 
     /**
-     * Определяет, является ли устройство статичным маячком (iBeacon, Eddystone, AltBeacon и т.п.)
+     * Возвращает стабильный ID для “статичных/условно статичных” маячков.
+     * TLM/EID и прочее “динамическое” сюда не включаем.
      */
-    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-    private fun isBeacon(result: ScanResult): Boolean {
-        val record = result.scanRecord ?: return false
-
-        // 1. iBeacon (Apple)
-        val appleData = record.getManufacturerSpecificData(0x004C)
-        if (appleData != null && appleData.size >= 23) {
-            if (appleData[0] == 0x02.toByte() && appleData[1] == 0x15.toByte()) {
-                return true
-            }
+    private fun buildStaticBeaconId(b: Beacon): String? {
+        // iBeacon
+        if (b.manufacturer == 0x004C && b.beaconTypeCode == 0x0215) {
+            return "ibeacon:${b.id1}:${b.id2}:${b.id3}"
         }
 
-        // 2. Eddystone (Google)
-        val eddystoneUuid = ParcelUuid.fromString("0000FEAA-0000-1000-8000-00805F9B34FB")
-        val eddystoneData = record.getServiceData(eddystoneUuid)
-        if (eddystoneData != null && eddystoneData.isNotEmpty()) {
-            return true
+        // AltBeacon
+        if (b.beaconTypeCode == 0xBEAC) {
+            return "altbeacon:${b.id1}:${b.id2}:${b.id3}"
         }
 
-        // 3. AltBeacon (Radius Networks)
-        val altBeaconData = record.getManufacturerSpecificData(0x0118)
-        if (altBeaconData != null && altBeaconData.size >= 24) {
-            if (altBeaconData[0] == 0xBE.toByte() && altBeaconData[1] == 0xAC.toByte()) {
-                return true
-            }
+        // Eddystone UID (static)
+        if (b.serviceUuid == 0xFEAA && b.beaconTypeCode == 0x00) {
+            return "eddystone_uid:${b.id1}${b.id2}"
         }
 
-        // 4. Другие известные идентификаторы производителей маячков
-        val knownBeaconManufacturers = listOf(
-            0x004C, // Apple
-            0x0118, // Radius Networks
-            0x0059, // Nordic Semi
-            0x0157, // Kontakt.io
-            0x001D, // Estimote
-            0x0133, // Bluecats
-            0x0639  // Gimbal
-        )
-        for (manufacturerId in knownBeaconManufacturers) {
-            val mData = record.getManufacturerSpecificData(manufacturerId)
-            if (mData != null && mData.isNotEmpty()) {
-                return true
-            }
+        // Eddystone URL (URL is usually in id1; static if beacon doesn't rotate URL)
+        if (b.serviceUuid == 0xFEAA && b.beaconTypeCode == 0x10) {
+            return "eddystone_url:${b.id1}"
         }
 
-        return false
-    }
+        // URI Beacon (fed8)
+        if (b.serviceUuid == 0xFED8 && b.beaconTypeCode == 0x00) {
+            return "uribeacon:${b.id1}"
+        }
 
-    private fun getDeviceType(type: Int): String = when (type) {
-        BluetoothDevice.DEVICE_TYPE_LE -> "BLE_DEVICE"
-        BluetoothDevice.DEVICE_TYPE_CLASSIC -> "CLASSIC"
-        BluetoothDevice.DEVICE_TYPE_DUAL -> "DUAL"
-        else -> "UNKNOWN"
+        // Eddystone TLM (0x20) intentionally ignored: telemetry, no stable ID
+        // Eddystone EID (0x30) intentionally ignored: rotating ID
+
+        return null
     }
 
     private fun hasBlePermissions(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) ==
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_SCAN) ==
                     PackageManager.PERMISSION_GRANTED
         } else {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) ==
                     PackageManager.PERMISSION_GRANTED
         }
     }
 
-    private fun isBleSupported(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-            context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
+    private fun isLocationEnabled(): Boolean {
+        val lm = appContext.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            lm.isLocationEnabled
         } else {
-            false
+            @Suppress("DEPRECATION")
+            lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                    lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         }
     }
+
+
 }

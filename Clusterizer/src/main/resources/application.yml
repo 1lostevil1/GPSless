@@ -3,25 +3,42 @@ spring:
     url: jdbc:postgresql://localhost:5432/LOCAPI_DB
     username: postgres
     password: postgres
+    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
 
   kafka:
     bootstrap-servers: localhost:9092
-
-    # Consumer для приёма JSON
     consumer:
-      group-id: locapi-group
+      group-id: locapi-group-${random.uuid}
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "*"
+        spring.json.trusted.packages: "com.example.network.dto"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: "com.example.network.dto.TrackDTO"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
-  clusterJob:
-    batchSize: 30
+clusterJob:
+  batchSize: 50
 
 server:
   port: 8090
+
+# Логирование (опционально, для отладки)
+logging:
+  level:
+    com.example: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.kafka: INFO

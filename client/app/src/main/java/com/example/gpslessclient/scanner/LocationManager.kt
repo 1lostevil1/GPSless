@@ -32,13 +32,34 @@ class LocationManager(private val context: Context) {
     private var isListening = false
     private var pendingContinuation: CancellableContinuation<GpsData?>? = null
 
+    private var updateListener: OnLocationUpdateListener? = null
+
+    interface OnLocationUpdateListener {
+        fun onLocationUpdated(gpsData: GpsData)
+    }
+
+    fun setOnLocationUpdateListener(listener: OnLocationUpdateListener?) {
+        updateListener = listener
+    }
+
     private val listener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
+            val oldLocation = lastLocation
             lastLocation = location
             lastUpdateTime = System.currentTimeMillis()
-            Log.d("LocationManager", "Location update: acc=${location.accuracy}")
 
-            // Если кто-то ждёт следующего обновления — будим его
+            // Проверяем, что координаты действительно изменились
+            val isDifferent = oldLocation == null ||
+                    (Math.abs(oldLocation.latitude - location.latitude) > 0.000001 ||
+                            Math.abs(oldLocation.longitude - location.longitude) > 0.000001)
+
+            if (isDifferent) {
+                Log.d("LocationManager", "GPS новое местоположение: provider=${location.provider}, acc=${location.accuracy}, lat=${location.latitude}, lon=${location.longitude}")
+                updateListener?.onLocationUpdated(location.toGpsData())
+            } else {
+                Log.d("LocationManager", "GPS обновление без изменения координат")
+            }
+
             pendingContinuation?.let {
                 if (it.isActive) {
                     pendingContinuation = null
@@ -47,27 +68,53 @@ class LocationManager(private val context: Context) {
             }
         }
 
-        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
-        override fun onProviderEnabled(provider: String) = Unit
-        override fun onProviderDisabled(provider: String) = Unit
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
+            Log.d("LocationManager", "Status changed: provider=$provider, status=$status")
+        }
+
+        override fun onProviderEnabled(provider: String) {
+            Log.d("LocationManager", "Provider enabled: $provider")
+        }
+
+        override fun onProviderDisabled(provider: String) {
+            Log.d("LocationManager", "Provider disabled: $provider")
+        }
     }
 
     fun startListening() {
-        if (isListening) return
-        if (!hasLocationPermission() || !isGpsEnabled()) return
+        if (isListening) {
+            Log.d("LocationManager", "Already listening")
+            return
+        }
+
+        if (!hasLocationPermission()) {
+            Log.e("LocationManager", "No location permission")
+            return
+        }
+
+        if (!isGpsEnabled()) {
+            Log.e("LocationManager", "GPS is disabled")
+            return
+        }
 
         try {
+            // Запрашиваем обновления GPS с минимальными интервалами
             locationManager.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
-                1000L,      // обновления раз в секунду
-                0f,
+                1000L,      // минимальное время между обновлениями (1 сек)
+                1f,         // минимальное расстояние (1 метр) - чтобы получать даже небольшие перемещения
                 listener,
                 handler.looper
             )
             isListening = true
-            Log.d("LocationManager", "Listening started")
+            Log.d("LocationManager", "GPS listening started (minDistance=1m)")
+
+            // Не используем getLastKnownLocation, чтобы не показывать старые координаты
+            // Ждем реального GPS фикса
         } catch (e: SecurityException) {
-            Log.e("LocationManager", "Security exception", e)
+            Log.e("LocationManager", "Security exception: ${e.message}")
+        } catch (e: Exception) {
+            Log.e("LocationManager", "Error starting GPS: ${e.message}")
         }
     }
 
@@ -77,38 +124,29 @@ class LocationManager(private val context: Context) {
         isListening = false
         pendingContinuation?.cancel()
         pendingContinuation = null
-        Log.d("LocationManager", "Listening stopped")
+        Log.d("LocationManager", "GPS listening stopped")
     }
 
-    /**
-     * Получить местоположение в виде GpsData.
-     * @param maxAge максимальный возраст последнего значения (мс). Если null – не учитывается.
-     * @param minAccuracy минимальная точность (метры). Если null – не учитывается.
-     * @param timeout таймаут ожидания нового обновления (мс), если последнее не подходит.
-     */
     suspend fun getLocation(
-        maxAge: Long? = 5000,
-        minAccuracy: Float? = 50.0f,
+        maxAge: Long? = null,
+        minAccuracy: Float? = null,
         timeout: Long = 10_000
     ): GpsData? {
-        // Если слушатель не запущен, запускаем (но лучше вызывать startListening явно)
         if (!isListening) {
             startListening()
         }
 
-        // Проверяем последнее значение
         val last = lastLocation
         val now = System.currentTimeMillis()
-        if (last != null) {
-            val age = now - lastUpdateTime
-            val accuracyOk = minAccuracy == null || last.accuracy <= minAccuracy
-            val freshOk = maxAge == null || age <= maxAge
-            if (accuracyOk && freshOk) {
-                return last.toGpsData()
-            }
+
+        // Всегда ждем новый GPS фикс, не используем кэш
+        // Если последнее обновление было больше 3 секунд назад - ждем новое
+        if (last != null && (now - lastUpdateTime) < 3000) {
+            Log.d("LocationManager", "Using recent location: age=${now - lastUpdateTime}ms")
+            return last.toGpsData()
         }
 
-        // Если не подходит – ждём следующего обновления
+        Log.d("LocationManager", "Waiting for new GPS fix...")
         return withTimeoutOrNull(timeout) {
             suspendCancellableCoroutine { cont ->
                 pendingContinuation?.cancel()
@@ -120,7 +158,6 @@ class LocationManager(private val context: Context) {
         }
     }
 
-    // Преобразование Location в GpsData
     private fun Location.toGpsData(): GpsData = GpsData(
         latitude = latitude,
         longitude = longitude,
@@ -130,15 +167,30 @@ class LocationManager(private val context: Context) {
         altitude = altitude
     )
 
-    fun isGpsEnabled(): Boolean = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+    fun isGpsEnabled(): Boolean {
+        val enabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        Log.d("LocationManager", "GPS enabled: $enabled")
+        return enabled
+    }
 
-    fun hasLocationPermission(): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    fun hasLocationPermission(): Boolean {
+        val has = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        Log.d("LocationManager", "Location permission: $has")
+        return has
+    }
 
     fun getStatus(): String {
         val gpsOk = isGpsEnabled()
         val permOk = hasLocationPermission()
-        return "GPS: ${if (gpsOk) "ВКЛ" else "ВЫКЛ"}, Разрешения: ${if (permOk) "ЕСТЬ" else "НЕТ"}"
+        val hasLastLocation = lastLocation != null
+        val lastLocationAge = if (hasLastLocation) System.currentTimeMillis() - lastUpdateTime else 0
+        return "GPS: ${if (gpsOk) "ВКЛ" else "ВЫКЛ"}, Разрешения: ${if (permOk) "ЕСТЬ" else "НЕТ"}, Последняя позиция: ${if (hasLastLocation) "${lastLocationAge}мс назад" else "нет"}"
+    }
+
+    fun forceUpdate() {
+        lastLocation = null
+        lastUpdateTime = 0
+        Log.d("LocationManager", "Force reset location cache")
     }
 
     fun release() {

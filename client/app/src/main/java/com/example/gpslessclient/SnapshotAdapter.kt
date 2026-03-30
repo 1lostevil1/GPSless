@@ -14,15 +14,20 @@ class SnapshotAdapter : RecyclerView.Adapter<SnapshotAdapter.ViewHolder>() {
     private val snapshots = mutableListOf<NetworkSnapshot>()
 
     fun addSnapshot(snapshot: NetworkSnapshot) {
-        if (snapshots.size >= 2) {
+        if (snapshots.size >= 5) {
             snapshots.clear()
         }
-        snapshots.add( snapshot);
+        snapshots.add(snapshot)
         notifyDataSetChanged()
     }
 
-    fun getSnapshots(): MutableList<NetworkSnapshot> {
-        return snapshots
+    fun clearSnapshots() {
+        snapshots.clear()
+        notifyDataSetChanged()
+    }
+
+    fun getSnapshots(): List<NetworkSnapshot> {
+        return snapshots.toList()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -45,17 +50,18 @@ class SnapshotAdapter : RecyclerView.Adapter<SnapshotAdapter.ViewHolder>() {
         private val tvBluetooth: TextView = itemView.findViewById(R.id.tvBluetooth)
 
         fun bind(snapshot: NetworkSnapshot) {
-            tvTime.text = DateFormat.format("HH:mm:ss", snapshot.timestamp)
-
             snapshot.location?.let {
                 tvLocation.text = String.format("%.6f, %.6f", it.latitude, it.longitude)
             } ?: run {
                 tvLocation.text = "Нет данных"
             }
 
-            tvWifi.text = "Wi-Fi: ${snapshot.wifiNetworks.size}"
-            tvCellular.text = "$snapshot.cellularNetworks?.size}"
-            tvBluetooth.text = "BT: ${snapshot.bluetoothDevices.size}"
+            tvWifi.text = "Wi-Fi: ${snapshot.wifiNetworks?.size ?: 0}"
+
+            val cellularText = if (snapshot.cellularNetwork != null) "есть" else "нет"
+            tvCellular.text = "Сотовая: $cellularText"
+
+            tvBluetooth.text = "BT: ${snapshot.bluetoothDevices?.size ?: 0}"
         }
     }
 }

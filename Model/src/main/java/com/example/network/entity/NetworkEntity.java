@@ -1,4 +1,5 @@
 package com.example.network.entity;
+import com.example.user.entity.Role;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -32,11 +33,21 @@ public class NetworkEntity {
     @Column(name = "signal_strength")
     private int signalStrength;
 
-    @JdbcTypeCode(SqlTypes.ENUM)
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "type", columnDefinition = "network_type", nullable = false)
     private NetworkType type;
 
-    @JdbcTypeCode(SqlTypes.ENUM)
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "status", columnDefinition = "status_type", nullable = false)
     private Status status;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "created_by", columnDefinition = "role", nullable = false)
+    private Role createdBy;
+
 
     private LocalDateTime createdAt;
 

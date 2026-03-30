@@ -28,7 +28,7 @@ public class ClusterScheduler {
     public ClusterScheduler(NetworkRepository networkRepository,
                             ClusterRepository clusterRepository,
                             ClusterAssignmentService clusterAssignmentService,
-                            @Value("${batch.size}") int batchSize) {
+                            @Value("${clusterJob.batchSize}") int batchSize) {
         this.networkRepository = networkRepository;
         this.clusterRepository = clusterRepository;
         this.clusterAssignmentService = clusterAssignmentService;
@@ -38,7 +38,7 @@ public class ClusterScheduler {
     @Scheduled(fixedRate = 10000)
     @Transactional
     public void job() {
-        List<NetworkEntity> networkEntities = networkRepository.findBatchNative(Status.READY, batchSize);
+        List<NetworkEntity> networkEntities = networkRepository.findBatchNative(Status.READY.name(), batchSize);
         if (networkEntities.isEmpty()) return;
 
         Map<String, List<NetworkEntity>> networksByKey = networkEntities.stream()

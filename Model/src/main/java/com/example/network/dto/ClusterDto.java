@@ -1,3 +1,18 @@
 package com.example.network.dto;
 
-public record ClusterDto(String id, String name, double latitude, double longitude, double radius) {}
+import com.example.network.entity.NetworkType;
+
+import java.time.LocalDateTime;
+
+public record ClusterDto(
+        Long id,
+        String clusterKey,
+        String name,
+        NetworkType type,
+        double lat,
+        double lon,
+        double radiusMeters,
+        int signalCount,
+        LocalDateTime updatedAt
+) {
+}

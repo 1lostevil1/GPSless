@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Ваши разрешения -->
+    <!-- Разрешения -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -30,8 +30,23 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
 
+        <uses-library android:name="org.apache.http.legacy" android:required="false" />
+
+        <!-- Login Activity -->
         <activity
-            android:name="com.example.gpslessclient.MainActivity"
+            android:name=".LoginActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Registration Activity -->
+        <activity
+            android:name=".RegistrationActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Main Activity (Launcher) -->
+        <activity
+            android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>

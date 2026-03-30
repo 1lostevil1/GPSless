@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString
 public class ClusterEntity {
 
     @Id
@@ -30,7 +31,9 @@ public class ClusterEntity {
 
     private String name;
 
-    @JdbcTypeCode(SqlTypes.ENUM)
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "type", columnDefinition = "network_type", nullable = false)
     private NetworkType type;
 
     private double latitude;

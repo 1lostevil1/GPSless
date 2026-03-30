@@ -1,8 +1,9 @@
 package com.example.gpslessclient.model
 
+
 data class NetworkSnapshot(
-    val timestamp: Long = System.currentTimeMillis(),
-    val location: GpsData? = null,
+    val snapshotTime: String?,
+    val location: GpsData?,
     val wifiNetworks: List<WifiNetwork> = emptyList(),
     val cellularNetwork: CellularNetwork?,
     val bluetoothDevices: List<BluetoothDeviceInfo> = emptyList()

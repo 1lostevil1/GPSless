@@ -1,38 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="8dp">
 
-    <Button
-        android:id="@+id/btnToggleGps"
+    <!-- Верхняя панель с переключателями и кнопками -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Начать сбор GPS"
-        android:textSize="18sp"
-        android:padding="12dp" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp">
 
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="GPS:"
+            android:textSize="12sp"/>
+
+        <Switch
+            android:id="@+id/switchUseGps"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:textSize="10sp"/>
+
+        <Button
+            android:id="@+id/btnCenterMap"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="📍"
+            android:textSize="14sp"/>
+
+        <Button
+            android:id="@+id/btnToggleGps"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="2"
+            android:layout_marginStart="4dp"
+            android:text="Старт"
+            android:textSize="12sp"/>
+
+        <Button
+            android:id="@+id/btnLogout"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="🚪"
+            android:textSize="14sp"/>
+
+    </LinearLayout>
+
+    <!-- Компактный статус (одна строка) -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:textSize="14sp"
-        android:text="Статус: ожидание" />
+        android:layout_marginBottom="4dp"
+        android:padding="4dp"
+        android:background="@android:color/darker_gray"
+        android:text="Статус..."
+        android:textColor="@android:color/white"
+        android:textSize="10sp"
+        android:maxLines="2"/>
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="История снимков (последние 20):"
-        android:textStyle="bold" />
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerView"
+    <!-- Карта занимает всё оставшееся место -->
+    <org.osmdroid.views.MapView
+        android:id="@+id/mapView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="8dp" />
+        android:layout_marginBottom="4dp"/>
+
+    <!-- Компактный список снапшотов -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"/>
 
 </LinearLayout>

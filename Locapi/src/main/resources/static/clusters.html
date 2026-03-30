@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clusters map</title>
+
+    <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+            integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+            crossorigin=""
+    />
+
+    <style>
+        html, body { height: 100%; margin: 0; }
+        #map { height: 100%; width: 100%; }
+
+        .panel {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 1000;
+            background: rgba(255,255,255,0.92);
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            max-width: 420px;
+            line-height: 1.25;
+        }
+        .panel code { font-size: 12px; }
+        .row { margin-top: 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        label { user-select: none; cursor: pointer; }
+        small { color: #444; }
+        .muted { color: #666; font-size: 12px; }
+        .badge { font-size: 12px; color: #333; }
+    </style>
+</head>
+
+<body>
+<div id="map"></div>
+
+<div class="panel">
+    <div><b>Clusters</b></div>
+
+    <div id="status">Loading…</div>
+
+    <div class="row">
+        <label><input type="checkbox" id="cbWifi" checked /> Wi‑Fi <span class="badge" id="cntWifi"></span></label>
+        <label><input type="checkbox" id="cbCell" checked /> Cellular <span class="badge" id="cntCell"></span></label>
+        <label><input type="checkbox" id="cbBt" checked /> Bluetooth <span class="badge" id="cntBt"></span></label>
+    </div>
+
+    <div class="muted" style="margin-top:6px;">
+        Endpoint: <code id="endpoint"></code>
+    </div>
+</div>
+
+<script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""
+></script>
+
+<script>
+    const API_URL = "/api/clusters";
+    document.getElementById("endpoint").textContent = API_URL;
+
+    const map = L.map('map').setView([55.751244, 37.618423], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Отдельные слои по типам (для галочек)
+    const wifiLayer = L.featureGroup().addTo(map);
+    const cellLayer = L.featureGroup().addTo(map);
+    const btLayer   = L.featureGroup().addTo(map);
+
+    const cbWifi = document.getElementById("cbWifi");
+    const cbCell = document.getElementById("cbCell");
+    const cbBt   = document.getElementById("cbBt");
+
+    function setLayerEnabled(layer, enabled) {
+        if (enabled) {
+            if (!map.hasLayer(layer)) layer.addTo(map);
+        } else {
+            if (map.hasLayer(layer)) map.removeLayer(layer);
+        }
+    }
+
+    cbWifi.addEventListener("change", () => setLayerEnabled(wifiLayer, cbWifi.checked));
+    cbCell.addEventListener("change", () => setLayerEnabled(cellLayer, cbCell.checked));
+    cbBt.addEventListener("change", () => setLayerEnabled(btLayer, cbBt.checked));
+
+    function toNum(v) {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    function detectType(c) {
+        // primary: поле enum type в DTO
+        const t = String(c.type ?? "").toUpperCase();
+        if (t === "WIFI" || t === "CELLULAR" || t === "BLUETOOTH") return t;
+
+        // fallback: по clusterKey, совпадает с вашей ClusterKeyStrategy: NetworkType.NAME + ...
+        const key = String(c.clusterKey ?? "");
+        if (key.startsWith("WIFI")) return "WIFI";
+        if (key.startsWith("CELLULAR")) return "CELLULAR";
+        if (key.startsWith("BLUETOOTH")) return "BLUETOOTH";
+
+        return "UNKNOWN";
+    }
+
+    function colorByType(type) {
+        // фиксированные цвета по типу, чтобы на карте было понятно
+        switch (type) {
+            case "WIFI": return { stroke: "#1976d2", fill: "#1976d2" };      // синий
+            case "CELLULAR": return { stroke: "#2e7d32", fill: "#2e7d32" };  // зелёный
+            case "BLUETOOTH": return { stroke: "#6a1b9a", fill: "#6a1b9a" }; // фиолетовый
+            default: return { stroke: "#555", fill: "#555" };
+        }
+    }
+
+    async function loadAndRender() {
+        const statusEl = document.getElementById("status");
+        statusEl.textContent = "Fetching clusters…";
+
+        let resp;
+        try {
+            resp = await fetch(API_URL, { method: "GET" });
+        } catch (e) {
+            statusEl.textContent = "Network error: " + e;
+            return;
+        }
+
+        if (!resp.ok) {
+            statusEl.textContent = `HTTP ${resp.status}: ${await resp.text()}`;
+            return;
+        }
+
+        let clusters;
+        try {
+            clusters = await resp.json();
+        } catch (e) {
+            statusEl.textContent = "Invalid JSON: " + e;
+            return;
+        }
+
+        if (!Array.isArray(clusters)) {
+            statusEl.textContent = "Response is not an array";
+            return;
+        }
+
+        wifiLayer.clearLayers();
+        cellLayer.clearLayers();
+        btLayer.clearLayers();
+
+        let renderedWifi = 0, renderedCell = 0, renderedBt = 0, skipped = 0;
+
+        for (const c of clusters) {
+            // под ваш DTO:
+            const lat = toNum(c.lat ?? c.latitude ?? c.centerLat);
+            const lon = toNum(c.lon ?? c.longitude ?? c.centerLon);
+            const radius = toNum(c.radiusMeters ?? c.radius_m ?? c.radius);
+
+            if (lat == null || lon == null || radius == null) { skipped++; continue; }
+
+            const type = detectType(c);
+            const col = colorByType(type);
+
+            const circle = L.circle([lat, lon], {
+                radius: radius,     // метры
+                color: col.stroke,
+                weight: 1,
+                opacity: 0.75,
+                fillColor: col.fill,
+                fillOpacity: 0.18
+            });
+
+            const title = c.name ?? c.clusterKey ?? c.id ?? "cluster";
+            circle.bindPopup(
+                `<b>${title}</b>` +
+                `<br/>type: ${type}` +
+                `<br/>radius: ${radius} m` +
+                `<br/>lat: ${lat}` +
+                `<br/>lon: ${lon}`
+            );
+
+            if (type === "WIFI") { circle.addTo(wifiLayer); renderedWifi++; }
+            else if (type === "CELLULAR") { circle.addTo(cellLayer); renderedCell++; }
+            else if (type === "BLUETOOTH") { circle.addTo(btLayer); renderedBt++; }
+            else { circle.addTo(wifiLayer); skipped++; } // на ваше усмотрение
+        }
+
+        // применяем состояние чекбоксов
+        setLayerEnabled(wifiLayer, cbWifi.checked);
+        setLayerEnabled(cellLayer, cbCell.checked);
+        setLayerEnabled(btLayer, cbBt.checked);
+
+        // счётчики
+        document.getElementById("cntWifi").textContent = `(${renderedWifi})`;
+        document.getElementById("cntCell").textContent = `(${renderedCell})`;
+        document.getElementById("cntBt").textContent = `(${renderedBt})`;
+
+        const renderedTotal = renderedWifi + renderedCell + renderedBt;
+        statusEl.textContent = `Loaded ${clusters.length}, rendered ${renderedTotal}, skipped ${skipped}`;
+
+        // bounds по всем слоям сразу
+        const all = L.featureGroup([wifiLayer, cellLayer, btLayer]);
+        const bounds = all.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds.pad(0.1));
+    }
+
+    loadAndRender();
+</script>
+</body>
+</html>

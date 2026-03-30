@@ -1,29 +1,27 @@
-// NetworkDataCollector.kt
 package com.example.networkscanner.services
 
 import android.Manifest
 import android.app.ActivityManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
-import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.annotation.RequiresPermission
 import com.example.gpslessclient.model.GpsData
 import com.example.gpslessclient.model.NetworkSnapshot
-import com.example.gpslessclient.scanner.BluetoothScanner
-import com.example.gpslessclient.scanner.CellularScanner
 import com.example.gpslessclient.scanner.LocationManager
-import com.example.gpslessclient.scanner.WifiScanner
+import com.example.gpslessclient.scanner.ScannerManager
 import kotlinx.coroutines.*
+import java.time.LocalDateTime
 
 class NetworkDataCollector(private val context: Context) {
 
-    private val wifiScanner = WifiScanner(context)
-    private val cellularScanner = CellularScanner(context)
-    private val bluetoothScanner = BluetoothScanner(context)
+    private val wifiScanner = ScannerManager.getInstance(context).getWifiScanner()
+    private val cellularScanner = ScannerManager.getInstance(context).getCellularScanner()
+    private val bluetoothScanner = ScannerManager.getInstance(context).getBluetoothScanner()
     private val gpsProvider = LocationManager(context)
 
     private var collectionJob: Job? = null
@@ -34,7 +32,7 @@ class NetworkDataCollector(private val context: Context) {
     private var backgroundIntervalMillis: Long = 30 * 60 * 1000 // 30 минут
 
     // Текущее состояние
-    private var isInForeground = true // По умолчанию считаем, что приложение активно
+    private var isInForeground = true
     private val handler = Handler(Looper.getMainLooper())
     private var appStateChecker: Runnable? = null
 
@@ -44,12 +42,25 @@ class NetworkDataCollector(private val context: Context) {
     var onNewSnapshot: ((NetworkSnapshot) -> Unit)? = null
     var onCollectionError: ((String) -> Unit)? = null
     var onAppStateChanged: ((isForeground: Boolean) -> Unit)? = null
+    var onInfo: ((String) -> Unit)? = null  // Для информационных сообщений
+
+    // Режимы работы
+    private var useGps = true
+    private var lastGpsLocation: GpsData? = null
+    var onGpsUpdate: ((GpsData) -> Unit)? = null
 
     fun setScanIntervals(activeSeconds: Int, backgroundMinutes: Int) {
         activeIntervalMillis = (activeSeconds * 1000).toLong()
         backgroundIntervalMillis = (backgroundMinutes * 60 * 1000).toLong()
 
-        // Если сбор активен, перезапускаем с новым интервалом
+        if (isCollecting()) {
+            stopCollecting()
+            startCollecting()
+        }
+    }
+
+    fun setUseGps(useGps: Boolean) {
+        this.useGps = useGps
         if (isCollecting()) {
             stopCollecting()
             startCollecting()
@@ -69,37 +80,43 @@ class NetworkDataCollector(private val context: Context) {
         }
 
         if (isCollecting()) {
-            return true // Уже собираем
+            return true
         }
 
-        // Запускаем мониторинг состояния приложения
-        startAppStateMonitoring()
+        // Настраиваем GPS в зависимости от режима
+        if (useGps) {
+            // Режим GPS: подписываемся на частые обновления
+            gpsProvider.setOnLocationUpdateListener(object : LocationManager.OnLocationUpdateListener {
+                override fun onLocationUpdated(gpsData: GpsData) {
+                    lastGpsLocation = gpsData
+                    onGpsUpdate?.invoke(gpsData)
+                }
+            })
+        } else {
+            // Сетевой режим: отписываемся от частых обновлений
+            gpsProvider.setOnLocationUpdateListener(null)
+            lastGpsLocation = null
+        }
 
-        // Запускаем сбор данных
+        startAppStateMonitoring()
         gpsProvider.startListening()
+
         collectionJob = coroutineScope.launch {
             while (isActive) {
                 try {
-                    // Определяем текущий интервал
                     val currentInterval = if (isInForeground) {
                         activeIntervalMillis
                     } else {
                         backgroundIntervalMillis
                     }
 
-                    // Собираем данные параллельно
                     collectSingleSnapshotParallel()
-
-                    // Ждем указанный интервал
                     delay(currentInterval)
 
                 } catch (e: CancellationException) {
-                    // Корректная отмена
                     break
                 } catch (e: Exception) {
                     onCollectionError?.invoke("Ошибка сбора: ${e.message}")
-
-                    // Ждем минимальный интервал при ошибке
                     delay(minOf(activeIntervalMillis, backgroundIntervalMillis))
                 }
             }
@@ -113,9 +130,12 @@ class NetworkDataCollector(private val context: Context) {
         collectionJob = null
         stopAppStateMonitoring()
         gpsProvider.stopListening()
+        if (useGps) {
+            gpsProvider.setOnLocationUpdateListener(null)
+        }
+        lastGpsLocation = null
     }
 
-    // Мониторинг состояния приложения
     private fun startAppStateMonitoring() {
         stopAppStateMonitoring()
 
@@ -124,18 +144,18 @@ class NetworkDataCollector(private val context: Context) {
                 val wasInForeground = isInForeground
                 isInForeground = isAppInForeground()
 
-                // Уведомляем, если состояние изменилось
                 if (wasInForeground != isInForeground) {
                     onAppStateChanged?.invoke(isInForeground)
-                    onCollectionError?.invoke(
-                        if (isInForeground)
-                            "Приложение перешло в активный режим (интервал: ${activeIntervalMillis/1000} сек)"
-                        else
-                            "Приложение перешло в фоновый режим (интервал: ${backgroundIntervalMillis/60000} мин)"
-                    )
+                    // Используем Log.d для информационных сообщений
+                    val message = if (isInForeground)
+                        "Приложение перешло в активный режим (интервал: ${activeIntervalMillis/1000} сек)"
+                    else
+                        "Приложение перешло в фоновый режим (интервал: ${backgroundIntervalMillis/60000} мин)"
+
+                    Log.d("NetworkDataCollector", message)
+                    onInfo?.invoke(message)
                 }
 
-                // Проверяем каждые 2 секунды
                 handler.postDelayed(this, 2000)
             }
         }
@@ -150,7 +170,6 @@ class NetworkDataCollector(private val context: Context) {
         }
     }
 
-    // Проверка, находится ли приложение на переднем плане
     private fun isAppInForeground(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             isAppInForegroundModern()
@@ -178,93 +197,60 @@ class NetworkDataCollector(private val context: Context) {
         return false
     }
 
-    // Альтернативный метод для Android Q и выше
-    @RequiresApi(Build.VERSION_CODES.Q)
-    private fun isAppInForegroundUsageStats(): Boolean {
-        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val currentTime = System.currentTimeMillis()
-        val stats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY,
-            currentTime - 1000 * 10, // Последние 10 секунд
-            currentTime
-        )
-
-        if (stats.isNotEmpty()) {
-            val sortedStats = stats.sortedByDescending { it.lastTimeUsed }
-            val mostRecent = sortedStats[0]
-            return mostRecent.packageName == context.packageName
-        }
-
-        return false
-    }
-
-    @RequiresApi(Build.VERSION_CODES.P)
-    @RequiresPermission(Manifest.permission.READ_PHONE_STATE)
-    suspend fun collectSingleSnapshot(): NetworkSnapshot = coroutineScope {
-        try {
-            collectSingleSnapshotParallel()
-        } catch (e: Exception) {
-            onCollectionError?.invoke("Ошибка параллельного сбора: ${e.message}")
-            throw e
-        }
-    }
-
     @RequiresApi(Build.VERSION_CODES.P)
     @RequiresPermission(Manifest.permission.READ_PHONE_STATE)
     private suspend fun collectSingleSnapshotParallel(): NetworkSnapshot = coroutineScope {
-        // Запускаем все сканирования параллельно
-        val locationDeferred = async { gpsProvider.getLocation() }
+        val locationDeferred = async {
+            if (useGps) {
+                lastGpsLocation ?: gpsProvider.getLocation()
+            } else {
+                gpsProvider.getLocation()
+            }
+        }
         val wifiDeferred = async { wifiScanner.scan() }
         val cellularDeferred = async { cellularScanner.getNetworkInfo() }
         val bluetoothDeferred = async { bluetoothScanner.scan() }
 
         try {
-            // Ждем завершения всех задач
             val location = locationDeferred.await()
             val wifiNetworks = wifiDeferred.await()
             val cellularNetwork = cellularDeferred.await()
             val bluetoothDevices = bluetoothDeferred.await()
 
-            // Создаем снимок
             val snapshot = NetworkSnapshot(
+                snapshotTime = LocalDateTime.now().toString(),
                 location = location,
                 wifiNetworks = wifiNetworks,
                 cellularNetwork = cellularNetwork,
                 bluetoothDevices = bluetoothDevices
             )
 
-            // Сохраняем
             _snapshots.add(snapshot)
-
-            // Уведомляем подписчиков
             onNewSnapshot?.invoke(snapshot)
-
-            // Логируем текущий режим
+            
             val mode = if (isInForeground) "активный" else "фоновый"
             val interval = if (isInForeground)
                 "${activeIntervalMillis/1000} сек"
             else
                 "${backgroundIntervalMillis/60000} мин"
-            onCollectionError?.invoke("Снимок создан (режим: $mode, интервал: $interval)")
+
+            val message = "Снимок создан (режим: $mode, интервал: $interval)"
+            Log.d("NetworkDataCollector", message)
+            onInfo?.invoke(message)
 
             snapshot
         } catch (e: Exception) {
-            // Если есть ошибки, отменяем все остальные задачи
             locationDeferred.cancel()
             wifiDeferred.cancel()
             cellularDeferred.cancel()
             bluetoothDeferred.cancel()
-
             throw e
         }
     }
 
-
-
     fun clearData() {
         _snapshots.clear()
     }
-
 
     fun getGpsStatus(): String {
         return gpsProvider.getStatus()
@@ -283,6 +269,4 @@ class NetworkDataCollector(private val context: Context) {
         coroutineScope.cancel()
         handler.removeCallbacksAndMessages(null)
     }
-
-    var onError: ((String) -> Unit)? = null
 }

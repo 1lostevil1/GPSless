@@ -2,12 +2,14 @@ package com.example.service.network;
 
 import com.example.network.dto.GpsData;
 import com.example.network.dto.NetworkSnapshot;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.List;
 
+@Slf4j
 @Service
 public class NetworkTrackValidator {
 
@@ -24,54 +26,75 @@ public class NetworkTrackValidator {
         this.maxCoordJumpMeters = maxCoordJumpMeters;
     }
 
-    public boolean isValid(List<NetworkSnapshot> track) {
-        if (track == null || track.size() < 2) {
-            return true;
+    /**
+     * Валидация трека
+     * @return true если трек валиден, false если нет
+     */
+    public boolean validateTrack(List<NetworkSnapshot> track) {
+        if (track == null || track.isEmpty()) {
+            return false;
         }
 
-        for (int i = 1; i < track.size(); i++) {
-            NetworkSnapshot prev = track.get(i - 1);
-            NetworkSnapshot curr = track.get(i);
-
-            if (!isValidSegment(prev, curr)) {
+        // Проверяем что все снапшоты имеют GPS
+        for (NetworkSnapshot snapshot : track) {
+            if (snapshot.getLocation() == null) {
+                log.debug("Снапшот без GPS");
                 return false;
             }
         }
+
+        // Если всего один снапшот - он валиден (админ, фон)
+        if (track.size() == 1) {
+            return true;
+        }
+
+        // Проверяем все сегменты между снапшотами
+        for (int i = 1; i < track.size(); i++) {
+            if (!isValidSegment(track.get(i - 1), track.get(i))) {
+                return false;
+            }
+        }
+
         return true;
     }
 
+    /**
+     * Проверка одного сегмента
+     */
     private boolean isValidSegment(NetworkSnapshot prev, NetworkSnapshot curr) {
-        // 1. Проверка порядка времени
-        if (curr.getSnapshotTime().isBefore(prev.getSnapshotTime()) ||
-                curr.getSnapshotTime().equals(prev.getSnapshotTime())) {
-            return false;
-        }
+        long timeGapMs = Math.abs(Duration.between(prev.getSnapshotTime(), curr.getSnapshotTime()).toMillis());
 
-        // 2. Проверка временного разрыва
-        long timeGapMs = Duration.between(prev.getSnapshotTime(), curr.getSnapshotTime()).toMillis();
+        // Проверка временного разрыва
         if (timeGapMs > maxAllowedTimeGapMs) {
+            log.debug("Превышен временной разрыв: {} ms", timeGapMs);
             return false;
         }
 
-        // 3. Расчёт расстояния и скорости
-        GpsData prevGps = prev.getLocation();
-        GpsData currGps = curr.getLocation();
+        // Расчет расстояния
+        double distance = calculateDistance(prev.getLocation(), curr.getLocation());
 
-        double distanceMeters = calculateDistance(prevGps, currGps);
-        double speedKmh = (distanceMeters * 3.6) / (timeGapMs / 1000.0);
-
-        // 4. Проверка на резкий скачок
-        if (distanceMeters > maxCoordJumpMeters && timeGapMs < 5000) {
+        // Проверка скачка координат
+        if (distance > maxCoordJumpMeters) {
+            log.debug("Превышен скачок координат: {} м", distance);
             return false;
         }
 
-        // 5. Проверка на превышение скорости
-        return !(speedKmh > maxAllowedSpeedKmh);
+        // Проверка скорости
+        double timeGapHours = timeGapMs / 1000.0 / 3600.0;
+        double speedKmh = distance / 1000.0 / timeGapHours;
+
+        if (speedKmh > maxAllowedSpeedKmh) {
+            log.debug("Превышена скорость: {} км/ч", speedKmh);
+            return false;
+        }
+
+        return true;
     }
 
+    /**
+     * Расчет расстояния по формуле гаверсинусов
+     */
     private double calculateDistance(GpsData a, GpsData b) {
-        final double R = 6371000; // Радиус Земли в метрах
-
         double lat1 = Math.toRadians(a.getLatitude());
         double lat2 = Math.toRadians(b.getLatitude());
         double deltaLat = Math.toRadians(b.getLatitude() - a.getLatitude());
@@ -80,8 +103,7 @@ public class NetworkTrackValidator {
         double hav = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
                 Math.cos(lat1) * Math.cos(lat2) *
                         Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(hav), Math.sqrt(1 - hav));
 
-        return R * c;
+        return 6371000 * 2 * Math.atan2(Math.sqrt(hav), Math.sqrt(1 - hav));
     }
 }

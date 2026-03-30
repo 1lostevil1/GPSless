@@ -9,7 +9,10 @@ import com.example.network.entity.NetworkType;
 import com.example.network.exception.LocationNotFoundException;
 import com.example.network.util.ClusterKeyStrategy;
 import com.example.repository.ClusterRepository;
+import com.github.davidmoten.geo.GeoHash;
+import com.github.davidmoten.geo.LatLong;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -19,6 +22,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class LocationService {
 
     private final ClusterRepository clusterRepository;
@@ -31,7 +35,7 @@ public class LocationService {
     private static final double SIZE_WEIGHT = 0.7;
     private static final double FRESHNESS_WEIGHT = 0.3;
 
-    public Point determineLocation(NetworkSnapshot snapshot) {
+    public LatLong determineLocation(NetworkSnapshot snapshot) {
         Set<String> keys = collectClusterKeys(snapshot);
         if (keys.isEmpty()) {
             throw new LocationNotFoundException("No networks in snapshot");
@@ -44,6 +48,8 @@ public class LocationService {
         Map<String, List<ClusterEntity>> clustersByKey = allClusters.stream()
                 .collect(Collectors.groupingBy(ClusterEntity::getClusterKey));
 
+        log.info("найденные кластеры: {}",clustersByKey.toString());
+
         // Для каждого ключа выбираем лучший кластер (по размеру и свежести)
         Map<String, ClusterEntity> bestClusterByKey = new HashMap<>();
         for (Map.Entry<String, List<ClusterEntity>> entry : clustersByKey.entrySet()) {
@@ -51,6 +57,8 @@ public class LocationService {
                     .max(Comparator.comparingDouble(this::computeClusterScore))
                     .ifPresent(cluster -> bestClusterByKey.put(entry.getKey(), cluster));
         }
+
+        log.info("найденные лучшие кластеры: {}",bestClusterByKey);
 
         // Собираем взвешенные точки от каждого типа сети
         List<WeightedPoint> weightedPoints = new ArrayList<>();
@@ -62,7 +70,7 @@ public class LocationService {
                 String key = keyStrategy.generate(wifi);
                 ClusterEntity cluster = bestClusterByKey.get(key);
                 if (cluster != null) {
-                    double weight = computeGeometricWeight(wifi.getSignalLevel(), cluster, NetworkType.WIFI);
+                    double weight = computeGeometricWeight(wifi.getSignalLevel(), NetworkType.WIFI);
                     weightedPoints.add(new WeightedPoint(cluster.getLatitude(), cluster.getLongitude(), weight));
                 }
             }
@@ -75,7 +83,7 @@ public class LocationService {
                 String key = keyStrategy.generate(cell);
                 ClusterEntity cluster = bestClusterByKey.get(key);
                 if (cluster != null) {
-                    double weight = computeGeometricWeight(cell.signalStrength(), cluster, NetworkType.CELLULAR);
+                    double weight = computeGeometricWeight(cell.signalStrength(), NetworkType.CELLULAR);
                     weightedPoints.add(new WeightedPoint(cluster.getLatitude(), cluster.getLongitude(), weight));
                 }
             }
@@ -88,7 +96,7 @@ public class LocationService {
                 String key = keyStrategy.generate(bt);
                 ClusterEntity cluster = bestClusterByKey.get(key);
                 if (cluster != null) {
-                    double weight = computeGeometricWeight(bt.rssi(), cluster, NetworkType.BLUETOOTH);
+                    double weight = computeGeometricWeight(bt.rssi(), NetworkType.BLUETOOTH);
                     weightedPoints.add(new WeightedPoint(cluster.getLatitude(), cluster.getLongitude(), weight));
                 }
             }
@@ -103,18 +111,18 @@ public class LocationService {
         double avgLat = weightedPoints.stream().mapToDouble(p -> p.lat * p.weight).sum() / totalWeight;
         double avgLon = weightedPoints.stream().mapToDouble(p -> p.lon * p.weight).sum() / totalWeight;
 
-        return new Point(avgLat, avgLon);
+        return new LatLong(avgLat, avgLon);
     }
+
 
     /**
      * Оценка качества кластера (для выбора лучшего по ключу)
-     * Комбинация размера (log5) и свежести (экспоненциальное убывание)
      */
     private double computeClusterScore(ClusterEntity cluster) {
-        // Размер: log5(n+1)/3 (от 0 до 1, насыщение при 124)
-        double sizeFactor = Math.min(1.0, Math.log(cluster.getSignalCount() + 1) / Math.log(5) / 3.0);
+        // Размер: логарифмическая шкала с насыщением при 100 000 сигналов
+        // log10(100000) = 5, поэтому делим на 5
+        double sizeFactor = Math.min(1.0, Math.log10(cluster.getSignalCount() + 1) / 5.0);
 
-        // Свежесть: экспоненциальное убывание с периодом 30 дней
         long ageHours = Duration.between(cluster.getUpdatedAt(), LocalDateTime.now()).toHours();
         double freshnessFactor = Math.exp(-ageHours / (24.0 * 30));
 
@@ -125,8 +133,8 @@ public class LocationService {
      * Геометрический вес точки – определяется силой сигнала (близостью к кластеру)
      * и дополнительными факторами (радиус кластера, тип сети)
      */
-    private double computeGeometricWeight(int signalStrength, ClusterEntity cluster, NetworkType type) {
-        // Нормализация сигнала dBm (-120..-30 -> 0..1)
+    private double computeGeometricWeight(int signalStrength, NetworkType type) {
+        // Нормализация сигнала dBm
         int minSignal = -150;
         int maxSignal = -10;
         int clamped = Math.max(signalStrength, minSignal);
@@ -137,7 +145,6 @@ public class LocationService {
             case WIFI -> 1.0;
             case CELLULAR -> 0.3;    // соты менее точны
             case BLUETOOTH -> 1.5;    // маячки очень точны вблизи
-            default -> 0.5;
         };
 
         return signalFactor * typeFactor;
@@ -170,6 +177,4 @@ public class LocationService {
     }
 
     private record WeightedPoint(double lat, double lon, double weight) {}
-
-    public record Point(double lat, double lon) {}
 }

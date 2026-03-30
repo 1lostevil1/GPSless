@@ -4,6 +4,7 @@ import com.example.network.entity.ClusterEntity;
 import com.example.network.entity.NetworkEntity;
 import com.example.network.entity.Status;
 import com.example.repository.NetworkRepository;
+import com.example.user.entity.Role;
 import com.github.davidmoten.geo.LatLong;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -105,6 +106,11 @@ public class ClusterMathService {
     }
 
     private void updateClusterFromNetworks(ClusterEntity cluster, List<NetworkEntity> networks) {
+
+        int signalCount = networks.stream()
+                .mapToInt(n -> n.getCreatedBy().equals(Role.ROLE_ADMIN) ? 1000 : 1)
+                .sum();
+
         LatLong center = calculateCenter(networks);
         double radius = calculateRadius(networks, center);
 
@@ -112,14 +118,17 @@ public class ClusterMathService {
         cluster.setLongitude(center.getLon());
         cluster.setRadius(radius);
         cluster.setUpdatedAt(LocalDateTime.now());
-        cluster.setSignalCount(networks.size());
+        cluster.setSignalCount(signalCount);
+
+        log.debug("Cluster updated: center=({}, {}), radius={}m, signalCount={}",
+                center.getLat(), center.getLon(), radius, signalCount);
     }
 
     /**
-     * Вычисляет центр группы сетей
+     * Вычисляет центр группы сетей (среднее арифметическое)
      */
     public LatLong calculateCenter(List<NetworkEntity> networks) {
-        if (networks.isEmpty()) return new LatLong(0,0);
+        if (networks.isEmpty()) return new LatLong(0, 0);
 
         double sumLat = networks.stream()
                 .mapToDouble(NetworkEntity::getLatitude)
@@ -132,22 +141,39 @@ public class ClusterMathService {
     }
 
     /**
-     * Вычисляет радиус группы сетей (макс расстояние от центра)
+     * Вычисляет радиус группы сетей в метрах (максимальное расстояние от центра)
+     * Использует формулу гаверсинусов для точного расчета
      */
     public double calculateRadius(List<NetworkEntity> networks, LatLong center) {
         return networks.stream()
-                .mapToDouble(n -> distance(center.getLat(), center.getLon(), n.getLatitude(), n.getLongitude()))
+                .mapToDouble(n -> haversineDistance(
+                        center.getLat(), center.getLon(),
+                        n.getLatitude(), n.getLongitude()))
                 .max()
                 .orElse(0);
     }
 
-
     /**
-     * Евклидово расстояние между двумя точками (для малых расстояний)
+     * Расстояние по формуле гаверсинусов (для больших расстояний, точно в метрах)
+     * @param lat1 широта точки 1 (градусы)
+     * @param lon1 долгота точки 1 (градусы)
+     * @param lat2 широта точки 2 (градусы)
+     * @param lon2 долгота точки 2 (градусы)
+     * @return расстояние в метрах
      */
-    public double distance(double lat1, double lon1, double lat2, double lon2) {
-        double dx = lat1 - lat2;
-        double dy = lon1 - lon2;
-        return Math.sqrt(dx * dx + dy * dy);
+    public double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371000; // Радиус Земли в метрах
+
+        double lat1Rad = Math.toRadians(lat1);
+        double lat2Rad = Math.toRadians(lat2);
+        double deltaLat = Math.toRadians(lat2 - lat1);
+        double deltaLon = Math.toRadians(lon2 - lon1);
+
+        double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+                Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+                        Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c;
     }
 }
