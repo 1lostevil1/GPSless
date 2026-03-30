@@ -25,7 +25,7 @@ import java.util.Optional;
 public class UserService implements UserDetailsService {
 
     private final UserRepository userRepo;
-    private final PasswordEncoder passwordEncoder; // нужно добавить в конфиг
+    private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
 
     @Override

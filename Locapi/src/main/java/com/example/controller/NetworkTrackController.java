@@ -69,6 +69,7 @@ public class NetworkTrackController {
                 c.getLongitude(),
                 c.getRadius(),
                 c.getSignalCount(),
+                c.getGeohash(),
                 c.getUpdatedAt()
         );
     }

@@ -160,11 +160,14 @@
 
         let renderedWifi = 0, renderedCell = 0, renderedBt = 0, skipped = 0;
 
+        console.log(clusters)
+
         for (const c of clusters) {
             // под ваш DTO:
             const lat = toNum(c.lat ?? c.latitude ?? c.centerLat);
             const lon = toNum(c.lon ?? c.longitude ?? c.centerLon);
             const radius = toNum(c.radiusMeters ?? c.radius_m ?? c.radius);
+            const geohash = c.geohash;
 
             if (lat == null || lon == null || radius == null) { skipped++; continue; }
 
@@ -186,7 +189,8 @@
                 `<br/>type: ${type}` +
                 `<br/>radius: ${radius} m` +
                 `<br/>lat: ${lat}` +
-                `<br/>lon: ${lon}`
+                `<br/>lon: ${lon}` +
+                `<br/>geohash: ${geohash}`
             );
 
             if (type === "WIFI") { circle.addTo(wifiLayer); renderedWifi++; }

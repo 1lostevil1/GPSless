@@ -13,6 +13,7 @@ public record ClusterDto(
         double lon,
         double radiusMeters,
         int signalCount,
+        String geohash,
         LocalDateTime updatedAt
 ) {
 }

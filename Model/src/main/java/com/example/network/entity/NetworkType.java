@@ -7,9 +7,9 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum NetworkType {
-    WIFI (7),
+    WIFI (6),
     CELLULAR(4),
-    BLUETOOTH(7);
+    BLUETOOTH(6);
 
     private final int geohashLength;
 
