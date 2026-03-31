@@ -6,13 +6,33 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
 
   kafka:
     bootstrap-servers: localhost:9092
-    consumer:
-      group-id: locapi-group
-      auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+validator:
+  max-time-gap-ms: 300000
+  max-speed-kmh: 300.0
+  max-coord-jump-meters: 500.0
+
+jwt:
+  secret: mySuperSecretKey12345678901234567890cnsbcbvmn123213c12312312
+  access:
+    lifetime: 900000  # 15 минут
+  refresh:
+    lifetime: 2592000000  # 30 дней
+
+topic: "snapshots"
 
 server:
+  address: 0.0.0.0
   port: 8080
