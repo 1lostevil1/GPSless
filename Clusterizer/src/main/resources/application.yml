@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/LOCAPI_DB
+    url: jdbc:postgresql://postgres:5432/LOCAPI_DB  # Изменено с localhost на postgres
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
@@ -15,9 +15,9 @@ spring:
         format_sql: false
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: kafka:9092  # Изменено с localhost на kafka
     consumer:
-      group-id: locapi-group-${random.uuid}
+      group-id: locapi-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
@@ -33,7 +33,7 @@ clusterJob:
   batchSize: 50
 
 server:
-  port: 8090
+  port: 8080
 
 # Логирование (опционально, для отладки)
 logging:

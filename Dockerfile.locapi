@@ -1,0 +1,29 @@
+# Этап сборки
+FROM maven:3.9-eclipse-temurin-21 AS builder
+
+WORKDIR /build
+
+# Копируем Model и собираем его первым
+COPY Model ./Model
+RUN cd Model && mvn clean install -DskipTests
+
+# Теперь копируем Locapi и кэшируем зависимости
+COPY Locapi/pom.xml ./Locapi/
+RUN cd Locapi && mvn dependency:go-offline
+
+# Копируем исходный код Locapi
+COPY Locapi ./Locapi
+
+# Собираем Locapi
+RUN cd Locapi && mvn clean package -DskipTests
+
+# Финальный этап
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# Копируем JAR
+COPY --from=builder /build/Locapi/target/*.jar /app/app.jar
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-jar", "app.jar"]
