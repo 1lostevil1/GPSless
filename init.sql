@@ -30,10 +30,10 @@ END $$;
 -- 2. Создание таблиц
 -- =====================================================
 
--- Таблица User (с кавычками из-за зарезервированного имени)
-CREATE TABLE IF NOT EXISTS "User" (
-                                      id BIGSERIAL PRIMARY KEY,
-                                      username VARCHAR(255) NOT NULL,
+-- Таблица user (с кавычками, как в Java)
+CREATE TABLE IF NOT EXISTS "user" (
+    id BIGSERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
     password VARCHAR(255) NOT NULL,
     role role
@@ -78,8 +78,6 @@ CREATE TABLE IF NOT EXISTS cluster (
     CONSTRAINT uk_cluster_geohash_key UNIQUE (geohash, cluster_key)
     );
 
-
-
 -- =====================================================
 -- 3. Создание индексов
 -- =====================================================
@@ -94,16 +92,7 @@ CREATE INDEX IF NOT EXISTS idx_cluster_geohash ON cluster(geohash);
 CREATE INDEX IF NOT EXISTS idx_cluster_type ON cluster(type);
 CREATE INDEX IF NOT EXISTS idx_cluster_cluster_key ON cluster(cluster_key);
 
--- Индексы для tracks
-CREATE INDEX IF NOT EXISTS idx_tracks_user_id ON tracks(user_id);
-CREATE INDEX IF NOT EXISTS idx_tracks_network_id ON tracks(network_id);
-CREATE INDEX IF NOT EXISTS idx_tracks_timestamp ON tracks(timestamp);
-
--- Индексы для snapshots
-CREATE INDEX IF NOT EXISTS idx_snapshots_network_id ON snapshots(network_id);
-CREATE INDEX IF NOT EXISTS idx_snapshots_cluster_id ON snapshots(cluster_id);
 
 -- Индексы для refresh_tokens
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_username ON refresh_tokens(username);
-
