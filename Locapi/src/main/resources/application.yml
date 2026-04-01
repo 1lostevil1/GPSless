@@ -40,6 +40,19 @@ jwt:
 
 topic: "snapshots"
 
+logging:
+  level:
+    root: INFO
+    org.springframework.security: TRACE
+    org.springframework.security.web.FilterChainProxy: DEBUG
+    org.springframework.security.web.access.intercept: TRACE
+    org.springframework.security.authentication: TRACE
+
+    org.springframework.boot.context.config: DEBUG
+    org.springframework.core.env: DEBUG
+
+    com.example: DEBUG
+
 server:
   address: 0.0.0.0
   port: 8080
