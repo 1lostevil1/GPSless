@@ -39,7 +39,7 @@ public class SecurityConfig {
                         .requestMatchers(PathRequest.toStaticResources().atCommonLocations()).permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/clusters.html", "/favicon.ico", "/error").permitAll()
                         .requestMatchers("/api/user/signup", "/api/user/createAuthToken", "/api/user/refresh").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/clusters").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/clusters", "/clusters").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
