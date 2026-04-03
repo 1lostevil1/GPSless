@@ -1,8 +1,6 @@
 package com.example.controller;
 
-import com.example.network.dto.ClusterDto;
 import com.example.network.dto.NetworkSnapshot;
-import com.example.network.entity.ClusterEntity;
 import com.example.network.exception.LocationNotFoundException;
 import com.example.service.network.LocationService;
 import com.github.davidmoten.geo.LatLong;

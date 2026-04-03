@@ -38,7 +38,9 @@ jwt:
   refresh:
     lifetime: 2592000000  # 30 дней
 
-topic: "snapshots"
+topic:
+  snapshots: "snapshots"
+  quality: "quality"
 
 logging:
   level:

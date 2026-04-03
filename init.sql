@@ -89,6 +89,9 @@ CREATE TABLE IF NOT EXISTS quality (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+ALTER TABLE quality
+    ADD CONSTRAINT uk_quality_geohash UNIQUE (geohash);
+
 -- =====================================================
 -- 3. Создание индексов
 -- =====================================================

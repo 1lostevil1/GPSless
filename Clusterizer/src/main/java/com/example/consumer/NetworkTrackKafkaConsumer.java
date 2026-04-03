@@ -1,4 +1,4 @@
-package com.example.service;
+package com.example.consumer;
 
 import com.example.network.dto.CellularNetwork;
 import com.example.network.dto.NetworkSnapshot;

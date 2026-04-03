@@ -6,12 +6,10 @@ import com.example.network.dto.NetworkSnapshot;
 import com.example.network.dto.WifiNetwork;
 import com.example.network.entity.ClusterEntity;
 import com.example.network.entity.NetworkType;
-import com.example.network.entity.QualityEntity;
 import com.example.network.exception.LocationNotFoundException;
 import com.example.network.util.ClusterKeyStrategy;
+import com.example.quality.dto.QualityEvent;
 import com.example.repository.ClusterRepository;
-import com.example.repository.QualityRepository;
-import com.github.davidmoten.geo.GeoHash;
 import com.github.davidmoten.geo.LatLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,9 +26,9 @@ import java.util.stream.Collectors;
 @Slf4j
 public class LocationService {
 
-    private final ClusterRepository clusterRepository;
 
-    private final QualityRepository qualityRepository;
+    private final NetworkKafkaProducer networkKafkaProducer;
+    private final ClusterRepository clusterRepository;
     private final ClusterKeyStrategy keyStrategy;
 
     // Порог сигнала (слабые игнорируем)
@@ -40,7 +38,6 @@ public class LocationService {
     private static final double SIZE_WEIGHT = 0.7;
     private static final double FRESHNESS_WEIGHT = 0.3;
 
-    private static final int geohashLength = 7;
 
     public LatLong determineLocation(NetworkSnapshot snapshot) {
         Set<String> keys = collectClusterKeys(snapshot);
@@ -118,7 +115,7 @@ public class LocationService {
         double avgLat = weightedPoints.stream().mapToDouble(p -> p.lat * p.weight).sum() / totalWeight;
         double avgLon = weightedPoints.stream().mapToDouble(p -> p.lon * p.weight).sum() / totalWeight;
 
-        saveQuality(avgLat, avgLon, snapshot, bestClusterByKey.values().stream().toList());
+        sendQualityEvent(avgLat, avgLon, snapshot, bestClusterByKey.values().stream().toList());
 
         return new LatLong(avgLat, avgLon);
     }
@@ -187,7 +184,7 @@ public class LocationService {
 
 
     @Async
-    void saveQuality(Double lat, Double lon, NetworkSnapshot snapshot, List<ClusterEntity> networks) {
+    public void sendQualityEvent(Double lat, Double lon, NetworkSnapshot snapshot, List<ClusterEntity> networks) {
 
         Set<String> existingKeys = networks.stream()
                 .map(ClusterEntity::getClusterKey)
@@ -197,24 +194,11 @@ public class LocationService {
         Set<String> snapshotKeys = collectClusterKeys(snapshot);
 
         long oldCount = snapshotKeys.stream().filter(existingKeys::contains).count();
-        long newCount = snapshotKeys.size() - oldCount;
 
         double quality = snapshotKeys.isEmpty() ? 0.0 : (double) oldCount / snapshotKeys.size();
 
-        String geohash = GeoHash.encodeHash(lat, lon, geohashLength);
-
-        QualityEntity e = qualityRepository.findByGeohash(geohash)
-                .orElseGet(() -> {
-                    QualityEntity q = new QualityEntity();
-                    q.setGeohash(geohash);
-                    return q;
-                });
-
-        e.setOldSignalCount(oldCount);
-        e.setNewSignalCount(newCount);
-        e.setQuality(quality);
-
-        qualityRepository.save(e);
+        QualityEvent event = new  QualityEvent(lat,lon,quality,LocalDateTime.now());
+        networkKafkaProducer.sendQuality(event);
     }
 
     private record WeightedPoint(double lat, double lon, double weight) {}

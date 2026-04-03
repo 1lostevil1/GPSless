@@ -7,7 +7,7 @@ import com.example.network.entity.QualityEntity;
 import com.example.quality.dto.QualityDto;
 import com.example.repository.ClusterRepository;
 import com.example.repository.QualityRepository;
-import com.example.service.network.NetworkTrackKafkaProducer;
+import com.example.service.network.NetworkKafkaProducer;
 import com.example.service.network.NetworkTrackValidator;
 import com.example.user.entity.Role;
 import lombok.AllArgsConstructor;
@@ -24,7 +24,7 @@ import java.util.List;
 public class NetworkTrackController {
 
     private final NetworkTrackValidator validator;
-    private final NetworkTrackKafkaProducer producer;
+    private final NetworkKafkaProducer producer;
 
     private final ClusterRepository clusterRepository;
     private final QualityRepository qualityRepository;
@@ -35,7 +35,7 @@ public class NetworkTrackController {
 
         if(validator.validateTrack(track)) {
             log.info("TRACK VALIDATION SUCCESS: size={}, sending to Kafka", track.size());
-            producer.send(track, Role.ROLE_USER);
+            producer.sendTrack(track, Role.ROLE_USER);
             log.info("TRACK SENT SUCCESSFULLY: size={}", track.size());
             return true;
         }
@@ -49,7 +49,7 @@ public class NetworkTrackController {
     public void saveSnapshot(@RequestBody NetworkSnapshot snapshot) {
         log.info("ADMIN SAVE SNAPSHOT: snapshot details={}", snapshot);
         log.info("ADMIN SNAPSHOT VALIDATION: sending to Kafka with admin role");
-        producer.send(List.of(snapshot), Role.ROLE_ADMIN);
+        producer.sendTrack(List.of(snapshot), Role.ROLE_ADMIN);
         log.info("ADMIN SNAPSHOT SENT SUCCESSFULLY: snapshot={}", snapshot);
     }
 
@@ -87,12 +87,8 @@ public class NetworkTrackController {
 
     private static QualityDto toDto(QualityEntity q) {
         return new QualityDto(
-                q.getId(),
                 q.getGeohash(),
-                q.getNewSignalCount(),
-                q.getOldSignalCount(),
                 q.getQuality(),
-                q.getCreatedAt(),
                 q.getUpdatedAt()
         );
     }

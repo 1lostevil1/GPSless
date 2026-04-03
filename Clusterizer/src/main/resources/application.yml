@@ -32,6 +32,9 @@ spring:
 clusterJob:
   batchSize: 50
 
+qualityJob:
+  batchSize: 50
+
 server:
   port: 8080
 
