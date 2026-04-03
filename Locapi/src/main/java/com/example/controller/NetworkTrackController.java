@@ -3,7 +3,10 @@ package com.example.controller;
 import com.example.network.dto.ClusterDto;
 import com.example.network.dto.NetworkSnapshot;
 import com.example.network.entity.ClusterEntity;
+import com.example.network.entity.QualityEntity;
+import com.example.quality.dto.QualityDto;
 import com.example.repository.ClusterRepository;
+import com.example.repository.QualityRepository;
 import com.example.service.network.NetworkTrackKafkaProducer;
 import com.example.service.network.NetworkTrackValidator;
 import com.example.user.entity.Role;
@@ -23,7 +26,8 @@ public class NetworkTrackController {
     private final NetworkTrackValidator validator;
     private final NetworkTrackKafkaProducer producer;
 
-    private final ClusterRepository repository;
+    private final ClusterRepository clusterRepository;
+    private final QualityRepository qualityRepository;
 
     @PostMapping("/track/save")
     public boolean saveTrack(@RequestBody List<NetworkSnapshot> track) {
@@ -51,12 +55,19 @@ public class NetworkTrackController {
 
     @GetMapping("/clusters")
     public List<ClusterDto> getAllClusters() {
-        List<ClusterEntity> clusters = repository.findAll();
+        List<ClusterEntity> clusters = clusterRepository.findAll();
         log.info("GET CLUSTERS: returning {}", clusters.size());
 
         return clusters.stream()
                 .map(NetworkTrackController::toDto)
                 .toList();
+    }
+
+    @GetMapping("/quality")
+    public List<QualityDto> getQuality() {
+        List<QualityEntity> quality = qualityRepository.findAll();
+        log.info("GET QUALITY: returning {}", quality.size());
+        return quality.stream().map(NetworkTrackController::toDto).toList();
     }
 
     private static ClusterDto toDto(ClusterEntity c) {
@@ -71,6 +82,18 @@ public class NetworkTrackController {
                 c.getSignalCount(),
                 c.getGeohash(),
                 c.getUpdatedAt()
+        );
+    }
+
+    private static QualityDto toDto(QualityEntity q) {
+        return new QualityDto(
+                q.getId(),
+                q.getGeohash(),
+                q.getNewSignalCount(),
+                q.getOldSignalCount(),
+                q.getQuality(),
+                q.getCreatedAt(),
+                q.getUpdatedAt()
         );
     }
 }

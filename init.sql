@@ -78,6 +78,17 @@ CREATE TABLE IF NOT EXISTS cluster (
     CONSTRAINT uk_cluster_geohash_key UNIQUE (geohash, cluster_key)
     );
 
+-- Таблица quality
+CREATE TABLE IF NOT EXISTS quality (
+    id BIGSERIAL PRIMARY KEY,
+    geohash VARCHAR(10),
+    new_signal_count BIGINT NOT NULL DEFAULT 0,
+    old_signal_count BIGINT NOT NULL DEFAULT 0,
+    quality DOUBLE PRECISION NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
 -- =====================================================
 -- 3. Создание индексов
 -- =====================================================
@@ -96,3 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_cluster_cluster_key ON cluster(cluster_key);
 -- Индексы для refresh_tokens
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_username ON refresh_tokens(username);
+
+-- Индексы для quality
+CREATE INDEX IF NOT EXISTS idx_quality_geohash ON quality(geohash);
+CREATE INDEX IF NOT EXISTS idx_quality_created_at ON quality(created_at);
