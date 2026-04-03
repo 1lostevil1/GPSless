@@ -40,7 +40,7 @@ public class LocationService {
     private static final double SIZE_WEIGHT = 0.7;
     private static final double FRESHNESS_WEIGHT = 0.3;
 
-    private static final int geohashLength = 6;
+    private static final int geohashLength = 7;
 
     public LatLong determineLocation(NetworkSnapshot snapshot) {
         Set<String> keys = collectClusterKeys(snapshot);
