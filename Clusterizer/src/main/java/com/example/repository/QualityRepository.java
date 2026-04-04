@@ -20,12 +20,10 @@ public interface QualityRepository extends JpaRepository<QualityEntity, Long> {
         """, nativeQuery = true)
     List<QualityEntity> findDirtyBatch(@Param("limit") int limit);
 
-    Optional<QualityEntity> findByGeohash(String geohash);
-
     @Modifying
     @Query(value = """
-        INSERT INTO quality (geohash, is_dirty, quality, new_signal_count, old_signal_count, created_at, updated_at)
-        VALUES (:geohash, true, 0, 0, 0, now(), now())
+        INSERT INTO quality (geohash, is_dirty, quality, created_at, updated_at)
+        VALUES (:geohash, true, 0, now(), now())
         ON CONFLICT (geohash)
         DO UPDATE SET is_dirty = true, updated_at = now()
         """, nativeQuery = true)
