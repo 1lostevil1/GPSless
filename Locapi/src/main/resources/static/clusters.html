@@ -368,8 +368,6 @@
                 `<b>Quality cell</b>` +
                 `<br/>geohash: ${gh}` +
                 `<br/>quality: ${Number.isFinite(quality) ? quality.toFixed(3) : "n/a"}` +
-                `<br/>oldSignalCount: ${q.oldSignalCount ?? "n/a"}` +
-                `<br/>newSignalCount: ${q.newSignalCount ?? "n/a"}` +
                 `<br/>updatedAt: ${q.updatedAt ?? q.createdAt ?? "n/a"}`
             );
 
