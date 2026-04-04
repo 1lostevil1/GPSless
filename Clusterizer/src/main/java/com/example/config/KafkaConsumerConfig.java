@@ -37,6 +37,16 @@ public class KafkaConsumerConfig {
     }
 
     @Bean
+    @Primary
+    public ConcurrentKafkaListenerContainerFactory<String, TrackDTO> trackKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, TrackDTO> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(trackConsumerFactory());
+        factory.setBatchListener(false);
+        return factory;
+    }
+
+    @Bean
     public ConsumerFactory<String, QualityEvent> qualityConsumerFactory() {
         Map<String, Object> props = new HashMap<>(kafkaProperties.buildConsumerProperties());
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -46,5 +56,14 @@ public class KafkaConsumerConfig {
         props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
 
         return new DefaultKafkaConsumerFactory<>(props);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, QualityEvent> qualityKafkaListenerContainerFactory() {
+        ConcurrentKafkaListenerContainerFactory<String, QualityEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(qualityConsumerFactory());
+        factory.setBatchListener(false);
+        return factory;
     }
 }

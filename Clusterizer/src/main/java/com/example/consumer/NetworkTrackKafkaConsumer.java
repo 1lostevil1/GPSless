@@ -27,7 +27,7 @@ public class NetworkTrackKafkaConsumer {
     private final ClusterKeyStrategy clusterKeyStrategy;
 
     @KafkaListener(topics = "snapshots",
-            containerFactory = "trackConsumerFactory")
+            containerFactory = "trackKafkaListenerContainerFactory")
     @Transactional
     public void listen(@Payload TrackDTO track) {
         List<NetworkSnapshot> snapshots = track.track();
