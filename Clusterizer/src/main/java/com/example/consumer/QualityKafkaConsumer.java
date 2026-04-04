@@ -20,7 +20,8 @@ public class QualityKafkaConsumer {
     private final QualityEventRepository qualityEventRepository;
     private final QualityRepository qualityRepository;
 
-    @KafkaListener(topics = "quality")
+    @KafkaListener(topics = "quality",
+    containerFactory = "qualityConsumerFactory")
     @Transactional
     public void listen(@Payload QualityEvent event) {
 

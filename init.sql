@@ -82,15 +82,23 @@ CREATE TABLE IF NOT EXISTS cluster (
 CREATE TABLE IF NOT EXISTS quality (
     id BIGSERIAL PRIMARY KEY,
     geohash VARCHAR(10),
-    new_signal_count BIGINT NOT NULL DEFAULT 0,
-    old_signal_count BIGINT NOT NULL DEFAULT 0,
     quality DOUBLE PRECISION NOT NULL DEFAULT 0,
+    is_dirty BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
 ALTER TABLE quality
     ADD CONSTRAINT uk_quality_geohash UNIQUE (geohash);
+
+-- Таблица quality_event
+CREATE TABLE IF NOT EXISTS quality_event (
+                                             id BIGSERIAL PRIMARY KEY,
+                                             geohash VARCHAR(255) NOT NULL,
+    quality DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
 
 -- =====================================================
 -- 3. Создание индексов
@@ -114,3 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_username ON refresh_tokens(usernam
 -- Индексы для quality
 CREATE INDEX IF NOT EXISTS idx_quality_geohash ON quality(geohash);
 CREATE INDEX IF NOT EXISTS idx_quality_created_at ON quality(created_at);
+
+-- Индекс для выборок по geohash и окну времени (sliding window)
+CREATE INDEX IF NOT EXISTS idx_quality_event_geohash_created_at
+    ON quality_event (geohash, created_at DESC);

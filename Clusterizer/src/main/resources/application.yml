@@ -19,12 +19,6 @@ spring:
     consumer:
       group-id: locapi-group
       auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "com.example.network.dto"
-        spring.json.use.type.headers: false
-        spring.json.value.default.type: "com.example.network.dto.TrackDTO"
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
